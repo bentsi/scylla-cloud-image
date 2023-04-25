@@ -321,6 +321,10 @@ class gcp_instance(cloud_instance):
             return True
         return False
 
+    def zone(self):
+        """Returns zone. i.e.: us-east1-b"""
+        return self.__instance_metadata("zone").rsplit('/', 1)[1]
+
     @staticmethod
     def get_file_size_by_seek(filename):
         "Get the file size by seeking at end"
@@ -759,6 +763,10 @@ class aws_instance(cloud_instance):
             else:
                 return 'ixgbevf'
         return None
+
+    def availability_zone(self):
+        """Returns availability zone. i.e.: us-east-1b"""
+        return self.__instance_metadata("placement/availability-zone")
 
     def disks(self):
         """Returns all disks in the system, as visible from the AWS registry"""

@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright 2022 ScyllaDB
+#
+# SPDX-License-Identifier: Apache-2.0
+import io
+import os
+import re
+import yaml
+import configparser
+import logging
+from abc import ABCMeta, abstractmethod
+from pathlib import PurePath
+from lib.log import setup_logging
+from lib.scylla_cloud import is_ec2, is_gce, is_azure, aws_instance, gcp_instance, azure_instance
+
+LOGGER = logging.getLogger(__name__)
+
+class JavaPropertiesParser:
+    def __load(self):
+        f = io.StringIO('[global]\n{}'.format(self._data))
+        self._cfg = configparser.ConfigParser()
+        self._cfg.optionxform = str
+        self._cfg.read_file(f)
+
+    def __escape(self, val):
+        return re.sub(r'([:=])', r'\\\1', val)
+
+    def __unescape(self, val):
+        return re.sub(r'\\([:=])', r'\1', val)
+
+    def __format_line(self, key, val):
+        esc_val = self.__escape(val)
+        return f'{key}={esc_val}'
+
+    def __add(self, key, val):
+        self._data += self.__format_line(key, val) + '\n'
+        self.__load()
+
+    def __init__(self, filename):
+        if isinstance(filename, PurePath):
+            self._filename = str(filename)
+        else:
+            self._filename = filename
+        if not os.path.exists(filename):
+            open(filename, 'a').close()
+        with open(filename) as f:
+            self._data = f.read()
+        self.__load()
+
+    def get(self, key):
+        val = self._cfg.get('global', key)
+        return self.__unescape(val)
+
+    def has_option(self, key):
+        return self._cfg.has_option('global', key)
+
+    def set(self, key, val):
+        if not self.has_option(key):
+            return self.__add(key, val)
+        new_line = self.__format_line(key, val)
+        self._data = re.sub(f'^{key}\s?[:=]\s?[^\n]*$', new_line, self._data, flags=re.MULTILINE)
+        self.__load()
+
+    def commit(self):
+        with open(self._filename, 'w') as f:
+            f.write(self._data)
+
+class CloudSnitch(metaclass=ABCMeta):
+    CASSANDRA_RACKDC_PATH = '/etc/scylla/cassandra-rackdc.properties'
+    SCYLLA_YAML_PATH = '/etc/scylla/scylla.yaml'
+
+    def __init__(self):
+        self.dc = None
+        self.rack = None
+        self.prefer_local = None
+        self.dc_suffix = None
+        self.__properties = JavaPropertiesParser(CloudSnitch.CASSANDRA_RACKDC_PATH)
+        self.__load_properties_file()
+
+    def __load_properties_file(self):
+        if self.__properties.has_option('dc'):
+            self.dc = self.__properties.get('dc')
+        if self.__properties.has_option('rack'):
+            self.rack = self.__properties.get('rack')
+        if self.__properties.has_option('prefer_local'):
+            self.prefer_local = self.__properties.get('prefer_local')
+        if self.__properties.has_option('dc_suffix'):
+            self.dc_suffix = self.__properties.get('dc_suffix')
+
+    def update_properties_file(self):
+        if self.dc is None:
+            raise Exception('dc is not set')
+        self.__properties.set('dc', self.dc)
+
+        if self.rack is None:
+            raise Exception('rack is not set')
+        self.__properties.set('rack', self.rack)
+
+        if self.prefer_local is None:
+            raise Exception('prefer_local is not set')
+        self.__properties.set('prefer_local', self.prefer_local)
+
+        if self.dc_suffix is not None:
+            self.__properties.set('dc_suffix', self.dc_suffix)
+        self.__properties.commit()
+        LOGGER.info('Configured cassandra-rackdc.properties with following values: dc=%s rack=%s prefer_local=%s dc_suffix=%s', self.dc, self.rack, self.prefer_local, self.dc_suffix)
+
+    @classmethod
+    def get_snitch_name_from_yaml(cls):
+        with open(CloudSnitch.SCYLLA_YAML_PATH) as f:
+            scylla_yaml = yaml.safe_load(f)
+        return scylla_yaml['endpoint_snitch']
+
+    @classmethod
+    def get_cloud_snitch(cls):
+        snitch_name = cls.get_snitch_name_from_yaml()
+        try:
+            snitch_cls = globals()[snitch_name]
+        except:
+            LOGGER.warning('Does not supported snitch:%s, exiting', snitch_name)
+            sys.exit(0)
+        LOGGER.info('Starting snitch: %s', snitch_name)
+        return snitch_cls()
+
+    @abstractmethod
+    def start(self):
+        pass
+
+class Ec2Snitch(CloudSnitch):
+    def __init__(self):
+        super().__init__()
+        if not is_ec2():
+            raise Exception('Could not detect EC2 instance')
+        self.__aws_instance = aws_instance()
+
+    def start(self):
+        # Split "us-east-1a" or "asia-1a" into "us-east"/"1a" and "asia"/"1a".
+        splited_zone = self.__aws_instance.availability_zone().rsplit('-', 1)
+        self.dc = splited_zone[0]
+        self.rack = splited_zone[1]
+        self.prefer_local = 'false'
+        if self.dc_suffix is not None:
+            self.dc += self.dc_suffix
+        self.update_properties_file()
+
+class GoogleCloudSnitch(CloudSnitch):
+    def __init__(self):
+        super().__init__()
+        if not is_gce():
+            raise Exception('Could not detect GCE instance')
+        self.__gcp_instance = gcp_instance()
+
+    def start(self):
+        # Split "us-central1-a" or "asia-east1-a" into "us-central1"/"a" and "asia-east1"/"a"
+        splited_zone = self.__gcp_instance.zone().rsplit('-', 1)
+        self.dc = splited_zone[0]
+        self.rack = splited_zone[1]
+        self.prefer_local = 'false'
+        if self.dc_suffix is not None:
+            self.dc += self.dc_suffix
+        self.update_properties_file()
+
+class AzureSnitch(CloudSnitch):
+    def __init__(self):
+        super().__init__()
+        if not is_azure():
+            raise Exception('Could not detect GCE instance')
+        self.__azure_instance = azure_instance()
+
+    def start(self):
+        location = self.__azure_instance.instancelocation
+        zone = self.__azure_instance.instancezone
+        if self.dc_suffix is not None:
+            location += self.dc_suffix
+        self.dc = location
+        self.rack = zone if zone else location
+        self.prefer_local = 'false'
+        self.update_properties_file()
+
+
+if __name__ == "__main__":
+    setup_logging()
+    snitch = CloudSnitch.get_cloud_snitch()
+    snitch.start()

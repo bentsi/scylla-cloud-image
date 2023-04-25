@@ -29,7 +29,7 @@ Obsoletes:      %{product}-ami
 rm -rf $RPM_BUILD_ROOT
 
 install -d m755 $RPM_BUILD_ROOT%{_unitdir}
-install -m644 common/scylla-image-setup.service common/scylla-image-post-start.service $RPM_BUILD_ROOT%{_unitdir}/
+install -m644 common/scylla-image-setup.service common/scylla-image-post-start.service common/scylla-cloud-snitch.service $RPM_BUILD_ROOT%{_unitdir}/
 install -d -m755 $RPM_BUILD_ROOT/opt/scylladb
 install -d -m755 $RPM_BUILD_ROOT/opt/scylladb/scylla-machine-image
 install -d -m755 $RPM_BUILD_ROOT/opt/scylladb/scylla-machine-image/lib
@@ -41,7 +41,8 @@ install -m755 common/scylla_configure.py common/scylla_post_start.py common/scyl
     --with-python3 ${RPM_BUILD_ROOT}/opt/scylladb/python3/bin/python3 \
     common/scylla_image_setup common/scylla_login common/scylla_configure.py \
     common/scylla_create_devices common/scylla_post_start.py \
-    common/scylla_cloud_io_setup common/scylla_ec2_check
+    common/scylla_cloud_io_setup common/scylla_ec2_check \
+    common/scylla_cloud_snitch
 
 %pre
 /usr/sbin/groupadd scylla 2> /dev/null || :
@@ -78,6 +79,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %{_unitdir}/scylla-image-setup.service
 %{_unitdir}/scylla-image-post-start.service
+%{_unitdir}/scylla-cloud-snitch.service
 /opt/scylladb/scylla-machine-image/*
 
 %changelog

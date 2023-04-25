@@ -131,6 +131,7 @@ if __name__ == '__main__':
     run('systemctl daemon-reload', shell=True, check=True)
     run('systemctl enable scylla-image-setup.service', shell=True, check=True)
     run('systemctl enable scylla-image-post-start.service', shell=True, check=True)
+    run('systemctl enable scylla-cloud-snitch.service', shell=True, check=True)
     run('/opt/scylladb/scripts/scylla_setup --no-coredump-setup --no-sysconfig-setup --no-raid-setup --no-io-setup --no-ec2-check --no-swap-setup --no-cpuscaling-setup', shell=True, check=True)
 
     # On Ubuntu, 'cpufrequtils' never fails even CPU scaling is not supported,
