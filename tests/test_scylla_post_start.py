@@ -1,7 +1,7 @@
 #
 # Copyright 2020 ScyllaDB
 #
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0
 import sys
 import logging
 from unittest import TestCase

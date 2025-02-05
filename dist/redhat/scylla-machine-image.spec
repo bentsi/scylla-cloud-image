@@ -4,7 +4,7 @@ Release:        %{release}
 Summary:        Scylla Machine Image
 Group:          Applications/Databases
 
-License:        ASL 2.0
+License:        AGPL-3.0
 URL:            http://www.scylladb.com/
 Source0:        %{name}-%{version}-%{release}.tar
 Requires:       %{product} = %{version} %{product}-python3 curl

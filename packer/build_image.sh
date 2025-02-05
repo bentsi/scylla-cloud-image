@@ -2,7 +2,7 @@
 #
 # Copyright 2021 ScyllaDB
 #
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0
 
 DIR=$(dirname $(readlink -f "$0"))
 source "$DIR"/../SCYLLA-VERSION-GEN

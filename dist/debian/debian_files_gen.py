@@ -4,7 +4,7 @@
 # Copyright (C) 2021 ScyllaDB
 #
 
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0
 
 import string
 import os

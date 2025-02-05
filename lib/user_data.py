@@ -1,7 +1,7 @@
 #
 # Copyright 2022 ScyllaDB
 #
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0
 import logging
 from email import message_from_string
 

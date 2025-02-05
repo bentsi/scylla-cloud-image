@@ -2,7 +2,7 @@
 #
 # Copyright 2021 ScyllaDB
 #
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0
 
 REALDIR=$(dirname $(readlink -f "$0"))
 DIR=$(dirname $(realpath -se $0))
